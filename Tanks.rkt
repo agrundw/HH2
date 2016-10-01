@@ -26,11 +26,6 @@
 ;; col? will determine if the bullet has hit anything
 (struct bullet (pos prop col?) #:mutable)
 
-#;(define (generate-terrain)
-    (let ([ground (for/vector ([i WIDTH])
-                    (random (/ HEIGHT 4) (* 3 (/ HEIGHT 4))))])
-      ground))
-
 (define (generate-terrain w h d r)
   (let* ([power (inexact->exact (expt 2 (ceiling (/ (log w) (log 2)))))]
          [ground (make-vector (+ power 1))]
@@ -50,18 +45,12 @@
                                       (- (* (random) displace 2) displace))))
            (set! displace (* displace r))
            (set! i (* i 2)))
-    ground
+    (define min-val (foldr (λ (x y) (min x y)) HEIGHT (vector->list ground)))
+    (vector-map (λ (x) (+ x (- (/ HEIGHT 2) min-val))) ground)
     ))
 
-(define (smooth t)
-  (for/vector ([i t])
-    (hamming i)))
-
-(define (hamming n)
-  (* HEIGHT (- .54 (* .46 (cos (/ (* 2 pi n) (- WIDTH 1)))))))
-
 ;; Terrain is a m x n matrix
-(define terrain (generate-terrain WIDTH HEIGHT 200 .6))
+(define terrain (generate-terrain WIDTH HEIGHT 400 .55))
 
 ;; World:
 ;; t1, t2 is a tank struct
@@ -76,7 +65,7 @@
     (place-image (square 2 "solid" "green") x val scene)))
 
 (define (handle-key w k)
-  (generate-terrain WIDTH HEIGHT 200 .6))
+  (generate-terrain WIDTH HEIGHT 400 .55))
 
 (define (play init)
   (big-bang terrain
