@@ -44,12 +44,12 @@
 ;; default bullet propagater
 (define (prop-bullet pos pow ang)
   (let* ([k .4]
-         [vel (make-posn (* k (cos ang) pow) (* k (sin ang) pow))])
+         [vel (make-posn (* k (cos ang) pow -1) (* k (sin ang) pow -1))])
     (λ (bul) 
       (set-posn-x! pos (+ (posn-x pos) (posn-x vel)))
       (set-posn-y! pos (+ (posn-y pos) (posn-y vel)))
       (set-bullet-pos! bul pos)
-      (set-posn-y! vel (- (posn-y vel) .6))
+      (set-posn-y! vel (+ (posn-y vel) .6))
       (list bul))))
 
 ;; default collision checker
@@ -59,7 +59,7 @@
       (let* ([terr (world-terr world)]
              [height (vector-ref terr
                                  (inexact->exact (round (posn-x (bullet-pos b)))))])
-        (<= (posn-y (bullet-pos b)) height))))
+        (>= (posn-y (bullet-pos b)) height))))
 
 ;; default collider
 (define (collide-bullet b world)
@@ -144,9 +144,9 @@
           [(key=? " " k)
            (set-world-lob! w
                            (list (bullet (make-posn (posn-x (tank-pos cur-tank))
-                                                    (+ 10 (vector-ref tn (posn-x (tank-pos cur-tank)))))
+                                                    (+ -10 (vector-ref tn (posn-x (tank-pos cur-tank)))))
                                          (prop-bullet (make-posn (posn-x (tank-pos cur-tank))
-                                                                 (+ 10 (vector-ref tn (posn-x (tank-pos cur-tank)))))
+                                                                 (+ -10 (vector-ref tn (posn-x (tank-pos cur-tank)))))
                                                       50
                                                       (tank-ang cur-tank))
                                          bullet-collide?
