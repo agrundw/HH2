@@ -56,8 +56,8 @@
 
 ;; checks if bullet collides with a tank
 (define (bullet-col-tank? b t)
-  (and (> (posn-x (bullet-pos b)) (- (posn-x (tank-pos t)) 15))
-       (< (posn-x (bullet-pos b)) (+ (posn-x (tank-pos t)) 15))
+  (and (> (posn-x (bullet-pos b)) (- (posn-x (tank-pos t)) 17))
+       (< (posn-x (bullet-pos b)) (+ (posn-x (tank-pos t)) 17))
        (>= (posn-y (bullet-pos b)) (- (posn-y (tank-pos t)) 10))))
 
 ;; default collision checker
@@ -293,9 +293,26 @@
          w]
         [else w]))
 
+(define FINAL-SCORE 100)
+
+(define (score w)
+  (let ([t1 (world-t1 w)]
+        [t2 (world-t2 w)])
+    (or (>= (tank-score t1) FINAL-SCORE)
+        (>= (tank-score t2) FINAL-SCORE))))
+
+(define (game-over w)
+  (let ([t1 (world-t1 w)]
+        [t2 (world-t2 w)])
+    (if (>= (tank-score t1 ) FINAL-SCORE)
+        (place-image (text (~a "Winner: " (tank-col t1)) 24 (tank-col t1)) 500 300 (render w))
+        (place-image (text (~a "Winner: " (tank-col t2)) 24 (tank-col t2)) 500 300 (render w)))))
+
 (define (play init)
   (big-bang init
             (on-tick tick)
             (to-draw render)
-            ;(on-mouse ...)
+            (stop-when score game-over)
             (on-key handle-key)))
+
+;; Use this to start a game ==> (play init)
