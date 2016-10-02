@@ -1,6 +1,6 @@
 #lang racket
-(require lang/posn)
 (require math/matrix)
+(require lang/posn)
 (require math)
 (require 2htdp/universe)
 (require 2htdp/image)
@@ -16,8 +16,12 @@
 
 ;; Tank:
 ;; pos is a posn describing the location of the tank
-;; ang is the angle of the turret 
-(struct tank (pos ang) #:mutable)
+;; ang is the angle of the turret in radians
+;; col is the color of the tank
+(struct tank (pos ang col) #:mutable)
+
+(define tank1 (tank (make-posn 100 400) (/ pi 2) "blue"))
+(define tank2 (tank (make-posn 900 400) (/ pi 2) "red"))
 
 ;; Bullets:
 ;; pos is a posn describing the location of the tank
@@ -56,19 +60,81 @@
 ;; t1, t2 is a tank struct
 ;; terr is a Terrain
 ;; lob is a Listof Bullets
-(struct world (t1 t2 terr lob) #:mutable)
+;; State is one of
+;; - 't1
+;; - 't2
+;; - 'anim
+(struct world (t1 t2 terr lob state) #:mutable)
+(define init (world tank1 tank2 terrain '() 't1))
+
+(define (draw-terrain t)
+  (for/fold ([scene (empty-scene 1000 600)])
+            ([val t]
+             [x WIDTH])
+    (add-line scene x HEIGHT x val "fuchsia")))
 
 (define (render w)
-  (for/fold ([scene (empty-scene 1000 600)])
-            ([val w]
-             [x WIDTH])
-    (place-image (square 2 "solid" "green") x val scene)))
+  (let* ([t1 (world-t1 w)]
+         [t2 (world-t2 w)]
+         [tn (world-terr w)])
+    (place-images (list (draw-tank t1 tn)
+                        (draw-tank t2 tn))
+                  (list (make-posn (posn-x (tank-pos t1))
+                                   (- (vector-ref tn (posn-x (tank-pos t1))) 8))
+                        (make-posn (posn-x (tank-pos t2))
+                                   (- (vector-ref tn (posn-x (tank-pos t2))) 8)))
+                  (draw-terrain tn))
+    ))
 
 (define (handle-key w k)
-  (generate-terrain WIDTH HEIGHT 400 .55))
+  (let ([cur-tank (if (symbol=? 't1 (world-state w))
+                      (world-t1 w)
+                      (world-t2 w))])
+      (cond [(key=? " " k)
+             (set-world-terr! w (generate-terrain WIDTH HEIGHT 400 .55))]
+            [(key=? "d" k) (set-posn-x! (tank-pos cur-tank)
+                                        (+ (posn-x (tank-pos cur-tank)) 1))]
+            [(key=? "a" k) (set-posn-x! (tank-pos cur-tank)
+                                        (- (posn-x (tank-pos cur-tank)) 1))]
+            [(key=? "e" k) (set-tank-ang! cur-tank
+                                          (+ (tank-ang cur-tank)
+                                             (degrees->radians 1)))]
+            [(key=? "q" k) (set-tank-ang! cur-tank
+                                          (- (tank-ang cur-tank)
+                                             (degrees->radians 1)))]))
+  w)
+
+(define (draw-tank tk tn)
+  (let* ([x (posn-x (tank-pos tk))]
+         [y (vector-ref tn x)]
+         [col (tank-col tk)]
+         [ang (tank-ang tk)]
+         [x1 (- x 15)]
+         [y1 (vector-ref tn x1)]
+         [x2 (+ x 15)]
+         [y2 (vector-ref tn x2)]
+         [rot (radians->degrees (atan (- y2 y1) (- x2 x1)))])
+    (rotate (* -1 rot)
+            (add-line (tank-image col) 14 0
+                      (- 14 (* 12 (cos ang)))
+                      (- 0 (* 12 (sin ang)))
+                      (pen "black" 3 "solid" "butt" "bevel")))
+    ))
+
+(define (tank-image c)
+  (polygon (list (make-posn 0 0)
+                 (make-posn 5 0)
+                 (make-posn 10 -5)
+                 (make-posn 20 -5)
+                 (make-posn 25 0)
+                 (make-posn 30 0)
+                 (make-posn 25 5)
+                 (make-posn 5 5))
+           "solid"
+           c))
 
 (define (play init)
-  (big-bang terrain
+  (big-bang init
             ;(on-tick ...)
             (to-draw render)
             ;(on-mouse ...)
