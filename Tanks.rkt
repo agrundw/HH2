@@ -54,12 +54,12 @@
 
 ;; default collision checker
 (define (bullet-collide? b world)
-  (and (not (or (< (posn-x (bullet-pos b)) 0)
-                (> (posn-x (bullet-pos b)) WIDTH)))
-       (let* ([terr (world-terr world)]
-              [height (vector-ref terr
-                                  (inexact->exact (round (posn-x (bullet-pos b)))))])
-         (<= (posn-y (bullet-pos b)) height))))
+  (or (< (posn-x (bullet-pos b)) 0)
+      (> (posn-x (bullet-pos b)) WIDTH)
+      (let* ([terr (world-terr world)]
+             [height (vector-ref terr
+                                 (inexact->exact (round (posn-x (bullet-pos b)))))])
+        (<= (posn-y (bullet-pos b)) height))))
 
 ;; default collider
 (define (collide-bullet b world)
@@ -118,7 +118,7 @@
               ([val (world-lob w)])
       (place-image (circle 5 "solid" "red")
                    (posn-x (bullet-pos val))
-                   (- HEIGHT (posn-y (bullet-pos val)))
+                   (posn-y (bullet-pos val))
                    scene))
     ))
 
@@ -127,6 +127,7 @@
                       (world-t1 w)
                       (world-t2 w))]
         [tn (world-terr w)])
+    
     (cond [(key=? "shift" k)
            (set-world-terr! w (generate-terrain WIDTH HEIGHT 400 .55))]
           [(or (symbol=? (world-state w) 'anim1) (symbol=? (world-state w) 'anim2)) w]
@@ -142,8 +143,10 @@
                                            (degrees->radians 1)))]
           [(key=? " " k)
            (set-world-lob! w
-                           (list (bullet (make-posn (posn-x (tank-pos cur-tank)) (+ 10 (vector-ref tn (posn-x (tank-pos cur-tank)))))
-                                         (prop-bullet (make-posn (posn-x (tank-pos cur-tank)) (+ 10 (vector-ref tn (posn-x (tank-pos cur-tank)))))
+                           (list (bullet (make-posn (posn-x (tank-pos cur-tank))
+                                                    (+ 10 (vector-ref tn (posn-x (tank-pos cur-tank)))))
+                                         (prop-bullet (make-posn (posn-x (tank-pos cur-tank))
+                                                                 (+ 10 (vector-ref tn (posn-x (tank-pos cur-tank)))))
                                                       50
                                                       (tank-ang cur-tank))
                                          bullet-collide?
@@ -165,12 +168,12 @@
          [x2 (+ x 15)]
          [y2 (vector-ref tn x2)]
          [rot (radians->degrees (atan (- y2 y1) (- x2 x1)))])
-    (rotate (* -1 rot)
-            (add-line (tank-image col) 14 0
-                      (- 14 (* 12 (cos ang)))
-                      (- 0 (* 12 (sin ang)))
-                      (pen "black" 3 "solid" "butt" "bevel")))
-    ))
+    
+    (add-line (rotate (* -1 rot)(tank-image col)) 14 0
+              (- 14 (* 12 (cos ang)))
+              (- 0 (* 12 (sin ang)))
+              (pen "black" 3 "solid" "butt" "bevel")))
+  )
 
 ;; tank image
 (define (tank-image c)
@@ -190,9 +193,9 @@
              (symbol=? (world-state w) 'anim2))
          (let* ([lob '()])
            (for ([bul (world-lob w)])
-                (if ((bullet-col? bul) bul w)
-                    ((bullet-on-col bul) bul w)
-                    (set! lob (append ((bullet-prop bul) bul) lob))))
+             (if ((bullet-col? bul) bul w)
+                 ((bullet-on-col bul) bul w)
+                 (set! lob (append ((bullet-prop bul) bul) lob))))
            (set-world-lob! w lob)
            (when (empty? lob)
              (set-world-state! w (if (symbol=? (world-state w) 'anim1)
