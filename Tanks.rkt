@@ -20,10 +20,10 @@
 ;; ang is the angle of the turret in radians
 ;; col is the color of the tank
 ;; los is a list of symbols representing different bullet types
-(struct tank (pos ang col rad pow los) #:mutable)
+(struct tank (pos ang col rad pow los score) #:mutable)
 
-(define tank1 (tank (make-posn 100 400) (/ pi 2) "blue" 0 50 '(single trip quint)))
-(define tank2 (tank (make-posn 900 400) (/ pi 2) "red" 0 50 '(single trip quint)))
+(define tank1 (tank (make-posn 100 400) (/ pi 2) "blue" 0 50 '(single trip quint) 0))
+(define tank2 (tank (make-posn 900 400) (/ pi 2) "red" 0 50 '(single trip quint) 0))
 (define terrain-img (empty-scene 0 0))
 
 ;; Bullets:
@@ -54,6 +54,12 @@
       (set-posn-y! vel (+ (posn-y vel) .6))
       (list bul))))
 
+;; checks if bullet collides with a tank
+(define (bullet-col-tank? b t)
+  (and (> (posn-x (bullet-pos b)) (- (posn-x (tank-pos t)) 15))
+       (< (posn-x (bullet-pos b)) (+ (posn-x (tank-pos t)) 15))
+       (>= (posn-y (bullet-pos b)) (- (posn-y (tank-pos t)) 10))))
+
 ;; default collision checker
 (define (bullet-collide? b world)
   (or (< (posn-x (bullet-pos b)) 0)
@@ -61,7 +67,9 @@
       (let* ([terr (world-terr world)]
              [height (vector-ref terr
                                  (inexact->exact (round (posn-x (bullet-pos b)))))])
-        (>= (posn-y (bullet-pos b)) height))))
+        (>= (posn-y (bullet-pos b)) height))
+      (bullet-col-tank? b (world-t1 world))
+      (bullet-col-tank? b (world-t2 world))))
 
 ;; default collider
 (define (collide-bullet b world)
@@ -69,10 +77,22 @@
          [x (inexact->exact (round (posn-x pos)))]
          [y (posn-y pos)]
          [rad 20]
-         [terr (world-terr world)])
-    (for ([i (in-range (* -1 rad) rad)])
+         [terr (world-terr world)]
+         [t1 (world-t1 world)]
+         [t2 (world-t2 world)]
+         [state (world-state world)])
+    (for ([i (in-range (* -1 rad) rad)]
+          #:when (and (< (+ x i) WIDTH)
+                      (> (+ x i) 0)
+                      (< (vector-ref terr (+ x i)) y)))
          (vector-set! terr (+ x i) (- (+ (vector-ref terr (+ x i)) rad) (abs i))))
     (set! terrain-img (draw-terrain terr))
+    (cond [(and (bullet-col-tank? b t1) (symbol=? 'anim1 state))
+           (set-tank-score! t1 (- (tank-score t1) 10))]
+          [(bullet-col-tank? b t1) (set-tank-score! t2 (+ (tank-score t2) 10))]
+          [(and (bullet-col-tank? b t2) (symbol=? 'anim2 state))
+           (set-tank-score! t2 (- (tank-score t2) 10))]
+          [(bullet-col-tank? b t2) (set-tank-score! t1 (+ (tank-score t1) 10))])
     world))
 
 ;; generates terrain
@@ -96,20 +116,19 @@
            (set! displace (* displace r))
            (set! i (* i 2)))
     (define min-val (foldr (λ (x y) (min x y)) HEIGHT (vector->list ground)))
-    (vector-map (λ (x) (+ x (- (/ HEIGHT 2) min-val))) ground)
-    ))
+    (vector-map (λ (x) (+ x (- (/ HEIGHT 2) min-val))) ground)))
 
-;; Terrain is a m x n matrix
-(define terrain (generate-terrain WIDTH HEIGHT 400 .55))
+;; Terrain is an vector of hieghts
+(define terrain (generate-terrain WIDTH HEIGHT 400 .5))
 ;; starting world
 (define init (world tank1 tank2 terrain '() 't1))
 
 ;; draws the terrain
 (define (draw-terrain t)
-  (for/fold ([scene (empty-scene 1000 600)])
+  (for/fold ([scene (empty-scene 1000 600 "light blue")])
             ([val t]
              [x WIDTH])
-    (add-line scene x HEIGHT x val "fuchsia")))
+    (add-line scene x HEIGHT x val "dark green")))
 
 (set! terrain-img (draw-terrain terrain))
 
@@ -117,6 +136,9 @@
 (define (render w)
   (let* ([t1 (world-t1 w)]
          [t2 (world-t2 w)]
+         [cur-tank (if (or (symbol=? 't1 (world-state w)) (symbol=? 'anim1 (world-state w)))
+                       (world-t1 w)
+                       (world-t2 w))]
          [tn (world-terr w)]
          [twt (place-images (list (draw-tank t1 tn)
                                   (draw-tank t2 tn))
@@ -129,10 +151,18 @@
                                                             (posn-x (tank-pos t2)))
                                                 8)))
                             terrain-img)])
-    
-    (for/fold ([scene twt])
+    (define BG (place-images (list (text (~a (tank-score t1)) 18 (tank-col t1))
+                                   (text (~a (tank-score t2)) 18 (tank-col t2))
+                                   (text (~a "Angle: " (round (radians->degrees (tank-rad cur-tank)))) 18 (tank-col cur-tank))
+                                   (text (~a "Power: " (tank-pow cur-tank)) 18 (tank-col cur-tank)))
+                             (list (make-posn 50 50)
+                                   (make-posn 950 50)
+                                   (make-posn 500 38)
+                                   (make-posn 500 63))
+                             twt))
+    (for/fold ([scene BG])
               ([val (world-lob w)])
-      (place-image (circle 5 "solid" "red")
+      (place-image (circle 3 "solid" "dark grey")
                    (posn-x (bullet-pos val))
                    (posn-y (bullet-pos val))
                    scene))))
@@ -151,7 +181,7 @@
 ;; generates the default bullet using a tank the terrain and an angle
 (define (gen-sing tnk terr rad)
   (gen-bul (make-posn (posn-x (tank-pos tnk))
-                      (+ -10 (vector-ref terr (posn-x (tank-pos tnk)))))
+                      (+ -12 (vector-ref terr (posn-x (tank-pos tnk)))))
            (tank-pow tnk)
            rad
            prop-bullet
@@ -187,7 +217,8 @@
                          (random (length (tank-los cur-tank))))])
     
     (cond [(key=? "shift" k)
-           (set-world-terr! w (generate-terrain WIDTH HEIGHT 400 .55))]
+           (set-world-terr! w (generate-terrain WIDTH HEIGHT 400 .5))
+           (set! terrain-img (draw-terrain (world-terr w)))]
           [(or (symbol=? (world-state w) 'anim1)
                (symbol=? (world-state w) 'anim2)) w]
           [(key=? "d" k) (set-posn-x! (tank-pos cur-tank)
@@ -200,6 +231,10 @@
           [(key=? "q" k) (set-tank-ang! cur-tank
                                         (- (tank-ang cur-tank)
                                            (degrees->radians 1)))]
+          [(key=? "w" k) (set-tank-pow! cur-tank
+                                        (min (+ (tank-pow cur-tank) 1) 100))]
+          [(key=? "s" k) (set-tank-pow! cur-tank
+                                        (max (- (tank-pow cur-tank) 1) 0))]
           [(key=? " " k)
            (set-world-lob! w
                            (generate-bullets symb cur-tank tn))
@@ -219,15 +254,15 @@
          [y1 (vector-ref tn x1)]
          [x2 (+ x 15)]
          [y2 (vector-ref tn x2)]
-         [deg (radians->degrees (atan (- y2 y1) (- x2 x1)))]
-         [rad (atan (- y2 y1) (- x2 x1))])
+         [rad (atan (- y2 y1) (- x2 x1))]
+         [deg (radians->degrees rad)])
     
     (set-tank-rad! tk (+ rad ang))
+    (set-posn-y! (tank-pos tk) y)
     (rotate (* -1 deg)(add-line (tank-image col) 14 0
                                 (- 14 (* 12 (cos ang)))
                                 (- 0 (* 12 (sin ang)))
-                                (pen "black" 3 "solid" "butt" "bevel")))
-    ))
+                                (pen "black" 3 "solid" "butt" "bevel")))))
 
 ;; tank image
 (define (tank-image c)
@@ -263,5 +298,4 @@
             (on-tick tick)
             (to-draw render)
             ;(on-mouse ...)
-            (on-key handle-key)
-            ))
+            (on-key handle-key)))
