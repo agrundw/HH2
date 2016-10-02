@@ -19,10 +19,12 @@
 ;; pos is a posn describing the location of the tank
 ;; ang is the angle of the turret in radians
 ;; col is the color of the tank
-(struct tank (pos ang col rad pow) #:mutable)
+;; los is a list of symbols representing different bullet types
+(struct tank (pos ang col rad pow los) #:mutable)
 
-(define tank1 (tank (make-posn 100 400) (/ pi 2) "blue" 0 50))
-(define tank2 (tank (make-posn 900 400) (/ pi 2) "red" 0 50))
+(define tank1 (tank (make-posn 100 400) (/ pi 2) "blue" 0 50 '(single trip quint)))
+(define tank2 (tank (make-posn 900 400) (/ pi 2) "red" 0 50 '(single trip quint)))
+(define terrain-img (empty-scene 0 0))
 
 ;; Bullets:
 ;; pos is a posn describing the location of the tank
@@ -63,7 +65,15 @@
 
 ;; default collider
 (define (collide-bullet b world)
-  world)
+  (let* ([pos (bullet-pos b)]
+         [x (inexact->exact (round (posn-x pos)))]
+         [y (posn-y pos)]
+         [rad 20]
+         [terr (world-terr world)])
+    (for ([i (in-range (* -1 rad) rad)])
+         (vector-set! terr (+ x i) (- (+ (vector-ref terr (+ x i)) rad) (abs i))))
+    (set! terrain-img (draw-terrain terr))
+    world))
 
 ;; generates terrain
 (define (generate-terrain w h d r)
@@ -76,13 +86,13 @@
     (vector-set! ground power init)
     (while (< i power)
            (for ([j (in-range (/ (/ power i) 2) power (/ power i))])
-             (vector-set! ground j (/ (+ (vector-ref ground
-                                                     (- j (/ (/ power i) 2)))
-                                         (vector-ref ground
-                                                     (+ j (/ (/ power i) 2))))
-                                      2))
-             (vector-set! ground j (+ (vector-ref ground j)
-                                      (- (* (random) displace 2) displace))))
+                (vector-set! ground j (/ (+ (vector-ref ground
+                                                        (- j (/ (/ power i) 2)))
+                                            (vector-ref ground
+                                                        (+ j (/ (/ power i) 2))))
+                                         2))
+                (vector-set! ground j (+ (vector-ref ground j)
+                                         (- (* (random) displace 2) displace))))
            (set! displace (* displace r))
            (set! i (* i 2)))
     (define min-val (foldr (λ (x y) (min x y)) HEIGHT (vector->list ground)))
@@ -101,6 +111,8 @@
              [x WIDTH])
     (add-line scene x HEIGHT x val "fuchsia")))
 
+(set! terrain-img (draw-terrain terrain))
+
 ;; render function for big-bang
 (define (render w)
   (let* ([t1 (world-t1 w)]
@@ -109,28 +121,75 @@
          [twt (place-images (list (draw-tank t1 tn)
                                   (draw-tank t2 tn))
                             (list (make-posn (posn-x (tank-pos t1))
-                                             (- (vector-ref tn (posn-x (tank-pos t1))) 8))
+                                             (- (vector-ref tn
+                                                            (posn-x (tank-pos t1)))
+                                                8))
                                   (make-posn (posn-x (tank-pos t2))
-                                             (- (vector-ref tn (posn-x (tank-pos t2))) 8)))
-                            (draw-terrain tn))])
+                                             (- (vector-ref tn
+                                                            (posn-x (tank-pos t2)))
+                                                8)))
+                            terrain-img)])
     
     (for/fold ([scene twt])
               ([val (world-lob w)])
       (place-image (circle 5 "solid" "red")
                    (posn-x (bullet-pos val))
                    (posn-y (bullet-pos val))
-                   scene))
-    ))
+                   scene))))
+
+;; generates a bullet using the position power angle and 3 functions
+;; function are defaulted to generic functions
+(define (gen-bul pos pow rad
+                 [prop prop-bullet]
+                 [col? bullet-collide?]
+                 [col collide-bullet])
+  (bullet pos
+          (prop pos pow rad)
+          col?
+          col))
+
+;; generates the default bullet using a tank the terrain and an angle
+(define (gen-sing tnk terr rad)
+  (gen-bul (make-posn (posn-x (tank-pos tnk))
+                      (+ -10 (vector-ref terr (posn-x (tank-pos tnk)))))
+           (tank-pow tnk)
+           rad
+           prop-bullet
+           bullet-collide?
+           collide-bullet))
+
+(define (generate-bullets symb tnk terr)
+  (let ([sing (gen-bul (make-posn (posn-x (tank-pos tnk))
+                                  (+ -10
+                                     (vector-ref terr
+                                                 (posn-x (tank-pos tnk)))))
+                       (tank-pow tnk)
+                       (tank-rad tnk))])
+    (cond [(symbol=? symb 'single)
+           (list (gen-sing tnk terr (tank-rad tnk)))]
+          [(symbol=? symb 'trip)
+           (list (gen-sing tnk terr (tank-rad tnk))
+                 (gen-sing tnk terr (- (tank-rad tnk) (/ pi 32)))
+                 (gen-sing tnk terr (+ (tank-rad tnk) (/ pi 32))))]
+          [(symbol=? symb 'quint)
+           (list (gen-sing tnk terr (tank-rad tnk))
+                 (gen-sing tnk terr (- (tank-rad tnk) (/ pi 32)))
+                 (gen-sing tnk terr (- (tank-rad tnk) (/ pi 64)))
+                 (gen-sing tnk terr (+ (tank-rad tnk) (/ pi 32)))
+                 (gen-sing tnk terr (+ (tank-rad tnk) (/ pi 64))))])))
 
 (define (handle-key w k)
-  (let ([cur-tank (if (symbol=? 't1 (world-state w))
-                      (world-t1 w)
-                      (world-t2 w))]
-        [tn (world-terr w)])
+  (let* ([cur-tank (if (symbol=? 't1 (world-state w))
+                       (world-t1 w)
+                       (world-t2 w))]
+         [tn (world-terr w)]
+         [symb (list-ref (tank-los cur-tank)
+                         (random (length (tank-los cur-tank))))])
     
     (cond [(key=? "shift" k)
            (set-world-terr! w (generate-terrain WIDTH HEIGHT 400 .55))]
-          [(or (symbol=? (world-state w) 'anim1) (symbol=? (world-state w) 'anim2)) w]
+          [(or (symbol=? (world-state w) 'anim1)
+               (symbol=? (world-state w) 'anim2)) w]
           [(key=? "d" k) (set-posn-x! (tank-pos cur-tank)
                                       (+ (posn-x (tank-pos cur-tank)) 1))]
           [(key=? "a" k) (set-posn-x! (tank-pos cur-tank)
@@ -143,14 +202,7 @@
                                            (degrees->radians 1)))]
           [(key=? " " k)
            (set-world-lob! w
-                           (list (bullet (make-posn (posn-x (tank-pos cur-tank))
-                                                    (+ -10 (vector-ref tn (posn-x (tank-pos cur-tank)))))
-                                         (prop-bullet (make-posn (posn-x (tank-pos cur-tank))
-                                                                 (+ -10 (vector-ref tn (posn-x (tank-pos cur-tank)))))
-                                                      (tank-pow cur-tank)
-                                                      (tank-rad cur-tank))
-                                         bullet-collide?
-                                         collide-bullet)))
+                           (generate-bullets symb cur-tank tn))
            (if (symbol=? 't1 (world-state w))
                (set-world-state! w 'anim1)
                (set-world-state! w 'anim2))]))
@@ -171,7 +223,6 @@
          [rad (atan (- y2 y1) (- x2 x1))])
     
     (set-tank-rad! tk (+ rad ang))
-    ;(displayln (~a rad ", " ang))
     (rotate (* -1 deg)(add-line (tank-image col) 14 0
                                 (- 14 (* 12 (cos ang)))
                                 (- 0 (* 12 (sin ang)))
@@ -196,9 +247,9 @@
              (symbol=? (world-state w) 'anim2))
          (let* ([lob '()])
            (for ([bul (world-lob w)])
-             (if ((bullet-col? bul) bul w)
-                 ((bullet-on-col bul) bul w)
-                 (set! lob (append ((bullet-prop bul) bul) lob))))
+                (if ((bullet-col? bul) bul w)
+                    ((bullet-on-col bul) bul w)
+                    (set! lob (append ((bullet-prop bul) bul) lob))))
            (set-world-lob! w lob)
            (when (empty? lob)
              (set-world-state! w (if (symbol=? (world-state w) 'anim1)
