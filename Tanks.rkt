@@ -19,10 +19,10 @@
 ;; pos is a posn describing the location of the tank
 ;; ang is the angle of the turret in radians
 ;; col is the color of the tank
-(struct tank (pos ang col rad) #:mutable)
+(struct tank (pos ang col rad pow) #:mutable)
 
-(define tank1 (tank (make-posn 100 400) (/ pi 2) "blue" 0))
-(define tank2 (tank (make-posn 900 400) (/ pi 2) "red" 0))
+(define tank1 (tank (make-posn 100 400) (/ pi 2) "blue" 0 50))
+(define tank2 (tank (make-posn 900 400) (/ pi 2) "red" 0 50))
 
 ;; Bullets:
 ;; pos is a posn describing the location of the tank
@@ -147,7 +147,7 @@
                                                     (+ -10 (vector-ref tn (posn-x (tank-pos cur-tank)))))
                                          (prop-bullet (make-posn (posn-x (tank-pos cur-tank))
                                                                  (+ -10 (vector-ref tn (posn-x (tank-pos cur-tank)))))
-                                                      50
+                                                      (tank-pow cur-tank)
                                                       (tank-rad cur-tank))
                                          bullet-collide?
                                          collide-bullet)))
@@ -177,41 +177,40 @@
                                 (- 0 (* 12 (sin ang)))
                                 (pen "black" 3 "solid" "butt" "bevel")))
     ))
-  
-  ;; tank image
-  (define (tank-image c)
-    (polygon (list (make-posn 0 0)
-                   (make-posn 5 0)
-                   (make-posn 10 -5)
-                   (make-posn 20 -5)
-                   (make-posn 25 0)
-                   (make-posn 30 0)
-                   (make-posn 25 5)
-                   (make-posn 5 5))
-             "solid"
-             c))
-  
-  (define (tick w)
-    (cond [(or (symbol=? (world-state w) 'anim1)
-               (symbol=? (world-state w) 'anim2))
-           (let* ([lob '()])
-             (for ([bul (world-lob w)])
-               (if ((bullet-col? bul) bul w)
-                   ((bullet-on-col bul) bul w)
-                   (set! lob (append ((bullet-prop bul) bul) lob))))
-             (set-world-lob! w lob)
-             (when (empty? lob)
-               (set-world-state! w (if (symbol=? (world-state w) 'anim1)
-                                       't2
-                                       't1))))
-           w]
-          [else w]))
-  
-  (define (play init)
-    (big-bang init
-              (on-tick tick)
-              (to-draw render)
-              ;(on-mouse ...)
-              (on-key handle-key)
-              ))
-  
+
+;; tank image
+(define (tank-image c)
+  (polygon (list (make-posn 0 0)
+                 (make-posn 5 0)
+                 (make-posn 10 -5)
+                 (make-posn 20 -5)
+                 (make-posn 25 0)
+                 (make-posn 30 0)
+                 (make-posn 25 5)
+                 (make-posn 5 5))
+           "solid"
+           c))
+
+(define (tick w)
+  (cond [(or (symbol=? (world-state w) 'anim1)
+             (symbol=? (world-state w) 'anim2))
+         (let* ([lob '()])
+           (for ([bul (world-lob w)])
+             (if ((bullet-col? bul) bul w)
+                 ((bullet-on-col bul) bul w)
+                 (set! lob (append ((bullet-prop bul) bul) lob))))
+           (set-world-lob! w lob)
+           (when (empty? lob)
+             (set-world-state! w (if (symbol=? (world-state w) 'anim1)
+                                     't2
+                                     't1))))
+         w]
+        [else w]))
+
+(define (play init)
+  (big-bang init
+            (on-tick tick)
+            (to-draw render)
+            ;(on-mouse ...)
+            (on-key handle-key)
+            ))
