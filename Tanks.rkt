@@ -58,20 +58,17 @@
       (or (< (posn-x pos) 0)
           (> (posn-x pos) WIDTH)
           (let* ([terr (world-terr world)]
-                 [height (vector-ref terr
-                                     (inexact->exact (round (posn-x pos))))])
+                 [x (inexact->exact (round (posn-x pos)))]
+                 [height (vector-ref terr x)])
             (>= (posn-y pos) height))
           (bullet-col-tank? (world-t1 world))
           (bullet-col-tank? (world-t2 world))))
 
-    (define/public (on-collision world)
+    (define/public (on-collision w)
+      (match-define (world t1 t2 terr _ state) w)
       (let* ([x (inexact->exact (round (posn-x pos)))]
              [y (posn-y pos)]
-             [rad 20]
-             [terr (world-terr world)]
-             [t1 (world-t1 world)]
-             [t2 (world-t2 world)]
-             [state (world-state world)])
+             [rad 20])
         (for ([i (in-range (* -1 rad) rad)]
               #:when (and (< (+ x i) WIDTH)
                           (> (+ x i) 0)
@@ -311,3 +308,4 @@
 
 ;; Use this to start a game ==> (play init)
 (play)
+
