@@ -58,7 +58,7 @@
       (or (< (posn-x pos) 0)
           (> (posn-x pos) WIDTH)
           (let* ([terr (world-terr world)]
-                 [x (inexact->exact (round (posn-x pos)))]
+                 [x (exact-round (posn-x pos))]
                  [height (vector-ref terr x)])
             (>= (posn-y pos) height))
           (bullet-col-tank? (world-t1 world))
@@ -66,7 +66,7 @@
 
     (define/public (on-collision w)
       (match-define (world t1 t2 terr _ state) w)
-      (let* ([x (inexact->exact (round (posn-x pos)))]
+      (let* ([x (exact-round (posn-x pos))]
              [y (posn-y pos)]
              [rad 20])
         (for ([i (in-range (* -1 rad) rad)]
@@ -103,16 +103,16 @@
     (vector-set! ground 0 init)
     (vector-set! ground power init)
     (while (< i power)
-      (for ([j (in-range (/ (/ power i) 2) power (/ power i))])
-        (vector-set! ground j (/ (+ (vector-ref ground
-                                                (- j (/ (/ power i) 2)))
-                                    (vector-ref ground
-                                                (+ j (/ (/ power i) 2))))
-                                 2))
-        (vector-set! ground j (+ (vector-ref ground j)
-                                 (- (* (random) displace 2) displace))))
-      (set! displace (* displace r))
-      (set! i (* i 2)))
+           (for ([j (in-range (/ (/ power i) 2) power (/ power i))])
+             (vector-set! ground j (/ (+ (vector-ref ground
+                                                     (- j (/ (/ power i) 2)))
+                                         (vector-ref ground
+                                                     (+ j (/ (/ power i) 2))))
+                                      2))
+             (vector-set! ground j (+ (vector-ref ground j)
+                                      (- (* (random) displace 2) displace))))
+           (set! displace (* displace r))
+           (set! i (* i 2)))
     (define min-val (foldr (λ (x y) (min x y)) HEIGHT (vector->list ground)))
     (vector-map (λ (x) (+ x (- (/ HEIGHT 2) min-val))) ground)))
 
@@ -134,32 +134,35 @@
 (define (render w)
   (let* ([t1 (world-t1 w)]
          [t2 (world-t2 w)]
-         [cur-tank (if (or (symbol=? 't1 (world-state w)) (symbol=? 'anim1 (world-state w)))
-                       (world-t1 w)
-                       (world-t2 w))]
+         [cur-tank
+          (if (or (symbol=? 't1 (world-state w)) (symbol=? 'anim1 (world-state w)))
+              (world-t1 w)
+              (world-t2 w))]
          [tn (world-terr w)]
-         [twt (place-images (list (draw-tank t1 tn)
-                                  (draw-tank t2 tn))
-                            (list (make-posn (posn-x (tank-pos t1))
-                                             (- (vector-ref tn
-                                                            (posn-x (tank-pos t1)))
-                                                8))
-                                  (make-posn (posn-x (tank-pos t2))
-                                             (- (vector-ref tn
-                                                            (posn-x (tank-pos t2)))
-                                                8)))
-                            terrain-img)])
-    (define BG (place-images (list (text (~a (tank-score t1)) 18 (tank-col t1))
-                                   (text (~a (tank-score t2)) 18 (tank-col t2))
-                                   (text (~a "Angle: " (round (radians->degrees (tank-rad cur-tank))))
-                                         18
-                                         (tank-col cur-tank))
-                                   (text (~a "Power: " (tank-pow cur-tank)) 18 (tank-col cur-tank)))
-                             (list (make-posn 50 50)
-                                   (make-posn 950 50)
-                                   (make-posn 500 38)
-                                   (make-posn 500 63))
-                             twt))
+         [twt (place-images
+               (list (draw-tank t1 tn)
+                     (draw-tank t2 tn))
+               (list (make-posn (posn-x (tank-pos t1))
+                                (- (vector-ref tn
+                                               (posn-x (tank-pos t1)))
+                                   8))
+                     (make-posn (posn-x (tank-pos t2))
+                                (- (vector-ref tn
+                                               (posn-x (tank-pos t2)))
+                                   8)))
+               terrain-img)])
+    (define BG (place-images 
+                (list (text (~a (tank-score t1)) 18 (tank-col t1))
+                      (text (~a (tank-score t2)) 18 (tank-col t2))
+                      (text (~a "Angle: " (round (radians->degrees (tank-rad cur-tank))))
+                            18
+                            (tank-col cur-tank))
+                      (text (~a "Power: " (tank-pow cur-tank)) 18 (tank-col cur-tank)))
+                (list (make-posn 50 50)
+                      (make-posn 950 50)
+                      (make-posn 500 38)
+                      (make-posn 500 63))
+                twt))
     (for/fold ([scene BG])
               ([val (world-lob w)])
       (place-image (circle 3 "solid" "dark grey")
@@ -180,24 +183,18 @@
            rad))
 
 (define (generate-bullets symb tnk terr)
-  (let ([sing (gen-bul (make-posn (posn-x (tank-pos tnk))
-                                  (+ -10
-                                     (vector-ref terr
-                                                 (posn-x (tank-pos tnk)))))
-                       (tank-pow tnk)
-                       (tank-rad tnk))])
-    (cond [(symbol=? symb 'single)
-           (list (gen-sing tnk terr (tank-rad tnk)))]
-          [(symbol=? symb 'trip)
-           (list (gen-sing tnk terr (tank-rad tnk))
-                 (gen-sing tnk terr (- (tank-rad tnk) (/ pi 32)))
-                 (gen-sing tnk terr (+ (tank-rad tnk) (/ pi 32))))]
-          [(symbol=? symb 'quint)
-           (list (gen-sing tnk terr (tank-rad tnk))
-                 (gen-sing tnk terr (- (tank-rad tnk) (/ pi 32)))
-                 (gen-sing tnk terr (- (tank-rad tnk) (/ pi 64)))
-                 (gen-sing tnk terr (+ (tank-rad tnk) (/ pi 32)))
-                 (gen-sing tnk terr (+ (tank-rad tnk) (/ pi 64))))])))
+  (cond [(symbol=? symb 'single)
+         (list (gen-sing tnk terr (tank-rad tnk)))]
+        [(symbol=? symb 'trip)
+         (list (gen-sing tnk terr (tank-rad tnk))
+               (gen-sing tnk terr (- (tank-rad tnk) (/ pi 32)))
+               (gen-sing tnk terr (+ (tank-rad tnk) (/ pi 32))))]
+        [(symbol=? symb 'quint)
+         (list (gen-sing tnk terr (tank-rad tnk))
+               (gen-sing tnk terr (- (tank-rad tnk) (/ pi 32)))
+               (gen-sing tnk terr (- (tank-rad tnk) (/ pi 64)))
+               (gen-sing tnk terr (+ (tank-rad tnk) (/ pi 32)))
+               (gen-sing tnk terr (+ (tank-rad tnk) (/ pi 64))))]))
 
 (define (handle-key w k)
   (let* ([cur-tank (if (symbol=? 't1 (world-state w))
