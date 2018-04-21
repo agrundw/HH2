@@ -3,7 +3,9 @@
 (require 2htdp/image
          2htdp/universe
          lang/posn
-         math)
+         math
+         profile
+         (prefix-in gv: profile/render-graphviz))
 
 (define WIDTH 1000)
 (define HEIGHT 600)
@@ -123,10 +125,19 @@
 
 ;; draws the terrain
 (define (draw-terrain t)
-  (for/fold ([scene (empty-scene 1000 600 "light blue")])
-            ([val t]
-             [x WIDTH])
-    (add-line scene x HEIGHT x val "dark green")))
+  (freeze 
+    ;(for/fold ([scene (empty-scene 1000 600 "light blue")])
+    ;          ([val t]
+    ;           [x WIDTH])
+    ;(add-line scene x HEIGHT x val "dark green"))))
+    (overlay/align "middle" "bottom"
+                    (polygon (cons (make-posn WIDTH HEIGHT)
+                             (cons (make-posn 0 HEIGHT)
+                              (for/list ([val t]
+                                       [x WIDTH]) 
+                              (make-posn x val))))
+                            "solid" "dark green")
+                   (empty-scene WIDTH HEIGHT "light blue"))))
 
 (set! terrain-img (draw-terrain terrain))
 
@@ -150,7 +161,8 @@
                                 (- (vector-ref tn
                                                (posn-x (tank-pos t2)))
                                    8)))
-               terrain-img)])
+             ;  (empty-scene WIDTH HEIGHT))])
+             terrain-img)])
     (define BG (place-images 
                 (list (text (~a (tank-score t1)) 18 (tank-col t1))
                       (text (~a (tank-score t2)) 18 (tank-col t2))
@@ -247,23 +259,25 @@
     
     (set-tank-rad! tk (+ rad ang))
     (set-posn-y! (tank-pos tk) y)
-    (rotate (* -1 deg)(add-line (tank-image col) 14 0
-                                (- 14 (* 12 (cos ang)))
-                                (- 0 (* 12 (sin ang)))
-                                (pen "black" 3 "solid" "butt" "bevel")))))
+    (rotate (* -1 deg) (add-line (tank-image col) 14 0
+                                 (- 14 (* 12 (cos ang)))
+                                 (- 0 (* 12 (sin ang)))
+                                 (pen "black" 3 "solid" "butt" "bevel"))))) 
+
 
 ;; tank image
 (define (tank-image c)
-  (polygon (list (make-posn 0 0)
-                 (make-posn 5 0)
-                 (make-posn 10 -5)
-                 (make-posn 20 -5)
-                 (make-posn 25 0)
-                 (make-posn 30 0)
-                 (make-posn 25 5)
-                 (make-posn 5 5))
+  (polygon (list (make-posn -1 0)
+                 (make-posn 4 0)
+                 (make-posn 9 -5)
+                 (make-posn 19 -5)
+                 (make-posn 24 0)
+                 (make-posn 29 0)
+                 (make-posn 24 5)
+                 (make-posn 4 5))
            "solid"
            c))
+  
 
 (define (tick w)
   (cond [(or (symbol=? (world-state w) 'anim1)
@@ -304,5 +318,4 @@
             (on-key handle-key)))
 
 ;; Use this to start a game ==> (play init)
-(play)
-
+(profile-thunk play);; #:render gv:render)
